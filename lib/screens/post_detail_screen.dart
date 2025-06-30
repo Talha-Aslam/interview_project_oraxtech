@@ -120,13 +120,13 @@ ${widget.post.body}
         onTap: onTap,
         borderRadius: BorderRadius.circular(16),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 4),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(
                 icon,
-                size: 16,
+                size: 20,
                 color: isActive
                     ? (icon == Icons.thumb_up || icon == Icons.thumb_up_outlined
                         ? Colors.blue
@@ -180,7 +180,7 @@ ${widget.post.body}
           Expanded(
             child: SingleChildScrollView(
               controller: _scrollController,
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -236,7 +236,7 @@ ${widget.post.body}
         const shareCount = 5;
 
         return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 4),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -424,12 +424,15 @@ ${widget.post.body}
                     // Name and time row
                     Row(
                       children: [
-                        Text(
-                          comment.name,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.black,
+                        Flexible(
+                          child: Text(
+                            comment.name,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.black,
+                            ),
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -452,8 +455,9 @@ ${widget.post.body}
                         color: Colors.black87,
                         height: 1.4,
                       ),
+                      softWrap: true,
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 8),
                     // Like/Dislike section
                     Row(
                       children: [
@@ -463,7 +467,7 @@ ${widget.post.body}
                           isLiked,
                           () => _handleCommentLike(comment.id),
                         ),
-                        const SizedBox(width: 20),
+                        const SizedBox(width: 15),
                         _buildCommentVoteButton(
                           isDisliked
                               ? Icons.thumb_down
