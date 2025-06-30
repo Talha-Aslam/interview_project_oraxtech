@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 import '../models/post.dart';
@@ -17,16 +18,37 @@ class PostDetailScreen extends StatefulWidget {
   State<PostDetailScreen> createState() => _PostDetailScreenState();
 }
 
-class _PostDetailScreenState extends State<PostDetailScreen> {
+class _PostDetailScreenState extends State<PostDetailScreen>
+    with TickerProviderStateMixin {
   // Controllers for UI interactions
   final ScrollController _scrollController = ScrollController();
   final GlobalKey _commentsKey = GlobalKey();
   final TextEditingController _commentController = TextEditingController();
   final FocusNode _commentFocusNode = FocusNode();
 
+  // Animation controllers for vote buttons
+  late AnimationController _heartAnimationController;
+  Animation<double>? _heartScaleAnimation;
+
   @override
   void initState() {
     super.initState();
+
+    // Initialize animation controllers (only need heart animation now)
+    _heartAnimationController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+
+    // Create scale animations
+    _heartScaleAnimation = Tween<double>(
+      begin: 1.0,
+      end: 1.25,
+    ).animate(CurvedAnimation(
+      parent: _heartAnimationController,
+      curve: Curves.easeOutBack,
+    ));
+
     // Load comments when screen initializes
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final appState = context.read<AppStateProvider>();
@@ -41,6 +63,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     _commentController.dispose();
     _commentFocusNode.dispose();
     _scrollController.dispose();
+    _heartAnimationController.dispose();
     super.dispose();
   }
 
@@ -110,48 +133,6 @@ ${widget.post.body}
     context
         .read<AppStateProvider>()
         .toggleCommentDislike(widget.post.id, commentId);
-  }
-
-  Widget _buildCommentVoteButton(
-      IconData icon, String count, bool isActive, VoidCallback onTap) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 4),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                icon,
-                size: 20,
-                color: isActive
-                    ? (icon == Icons.thumb_up || icon == Icons.thumb_up_outlined
-                        ? Colors.blue
-                        : Colors.red)
-                    : Colors.grey[600],
-              ),
-              const SizedBox(width: 4),
-              Text(
-                count,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: isActive
-                      ? (icon == Icons.thumb_up ||
-                              icon == Icons.thumb_up_outlined
-                          ? Colors.blue
-                          : Colors.red)
-                      : Colors.grey[600],
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 
   @override
@@ -267,6 +248,53 @@ ${widget.post.body}
 
   Widget _buildEngagementIcon(
       IconData icon, String count, Color color, VoidCallback onTap) {
+    // Determine if this is the heart icon for animation
+    final isHeartIcon = icon == Icons.favorite || icon == Icons.favorite_border;
+
+    // Wrap heart icon with animation
+    if (isHeartIcon && _heartScaleAnimation != null) {
+      return AnimatedBuilder(
+        animation: _heartScaleAnimation!,
+        builder: (context, child) {
+          return Transform.scale(
+            scale: _heartScaleAnimation!.value,
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () {
+                  // Add haptic feedback for heart icon
+                  HapticFeedback.lightImpact();
+                  _heartAnimationController.forward().then((_) {
+                    _heartAnimationController.reverse();
+                  });
+                  onTap();
+                },
+                borderRadius: BorderRadius.circular(25),
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    children: [
+                      Icon(icon, color: color, size: 26),
+                      const SizedBox(height: 4),
+                      Text(
+                        count,
+                        style: TextStyle(
+                          color: color,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      );
+    }
+
+    // Regular engagement icon without animation
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -461,20 +489,22 @@ ${widget.post.body}
                     // Like/Dislike section
                     Row(
                       children: [
-                        _buildCommentVoteButton(
-                          isLiked ? Icons.thumb_up : Icons.thumb_up_outlined,
-                          likeCount.toString(),
-                          isLiked,
-                          () => _handleCommentLike(comment.id),
+                        _CommentVoteButton(
+                          icon: isLiked
+                              ? Icons.thumb_up
+                              : Icons.thumb_up_outlined,
+                          count: likeCount.toString(),
+                          isActive: isLiked,
+                          onTap: () => _handleCommentLike(comment.id),
                         ),
                         const SizedBox(width: 15),
-                        _buildCommentVoteButton(
-                          isDisliked
+                        _CommentVoteButton(
+                          icon: isDisliked
                               ? Icons.thumb_down
                               : Icons.thumb_down_outlined,
-                          dislikeCount.toString(),
-                          isDisliked,
-                          () => _handleCommentDislike(comment.id),
+                          count: dislikeCount.toString(),
+                          isActive: isDisliked,
+                          onTap: () => _handleCommentDislike(comment.id),
                         ),
                       ],
                     ),
@@ -561,6 +591,115 @@ ${widget.post.body}
           ],
         ),
       ),
+    );
+  }
+}
+
+class _CommentVoteButton extends StatefulWidget {
+  final IconData icon;
+  final String count;
+  final bool isActive;
+  final VoidCallback onTap;
+
+  const _CommentVoteButton({
+    required this.icon,
+    required this.count,
+    required this.isActive,
+    required this.onTap,
+  });
+
+  @override
+  State<_CommentVoteButton> createState() => _CommentVoteButtonState();
+}
+
+class _CommentVoteButtonState extends State<_CommentVoteButton>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _animationController;
+  late Animation<double> _scaleAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+      duration: const Duration(milliseconds: 600),
+      vsync: this,
+    );
+    _scaleAnimation = Tween<double>(
+      begin: 1.0,
+      end: 1.15,
+    ).animate(CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.easeOutBack,
+    ));
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
+  }
+
+  void _handleTap() async {
+    // Add haptic feedback
+    HapticFeedback.lightImpact();
+
+    // Trigger animation
+    _animationController.forward().then((_) {
+      _animationController.reverse();
+    });
+
+    // Call the original onTap
+    widget.onTap();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _scaleAnimation,
+      builder: (context, child) {
+        return Transform.scale(
+          scale: _scaleAnimation.value,
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: _handleTap,
+              borderRadius: BorderRadius.circular(16),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 4),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      widget.icon,
+                      size: 20,
+                      color: widget.isActive
+                          ? (widget.icon == Icons.thumb_up ||
+                                  widget.icon == Icons.thumb_up_outlined
+                              ? Colors.blue
+                              : Colors.red)
+                          : Colors.grey[600],
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      widget.count,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: widget.isActive
+                            ? (widget.icon == Icons.thumb_up ||
+                                    widget.icon == Icons.thumb_up_outlined
+                                ? Colors.blue
+                                : Colors.red)
+                            : Colors.grey[600],
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
