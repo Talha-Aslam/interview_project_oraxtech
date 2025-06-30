@@ -11,6 +11,7 @@ dependencies:
     sdk: flutter
   http: ^1.1.0
   share_plus: ^7.0.0
+  provider: ^6.1.2
   # image_picker: ^1.0.7  # Temporarily commented for build stability
 
 dev_dependencies:

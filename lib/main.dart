@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'providers/app_state_provider.dart';
 import 'screens/post_list_screen.dart';
+import 'utils/constants.dart';
 
 void main() {
   runApp(const MainApp());
@@ -10,15 +13,18 @@ class MainApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Social Posts App',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-        fontFamily: 'System',
-        useMaterial3: true,
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(
+          create: (context) => AppStateProvider(),
+        ),
+      ],
+      child: MaterialApp(
+        title: 'Social Posts App',
+        theme: AppTheme.appTheme,
+        home: const PostListScreen(),
+        debugShowCheckedModeBanner: false,
       ),
-      home: const PostListScreen(),
-      debugShowCheckedModeBanner: false,
     );
   }
 }

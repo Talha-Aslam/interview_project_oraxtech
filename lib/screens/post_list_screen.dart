@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../models/post.dart';
-import '../services/api_service.dart';
+import '../providers/app_state_provider.dart';
+import '../utils/constants.dart';
+import '../widgets/common_widgets.dart' as common;
 import 'post_detail_screen.dart';
 
 class PostListScreen extends StatefulWidget {
@@ -11,37 +14,17 @@ class PostListScreen extends StatefulWidget {
 }
 
 class _PostListScreenState extends State<PostListScreen> {
-  List<Post> _posts = [];
-  bool _isLoading = true;
-  String? _errorMessage;
-
   @override
   void initState() {
     super.initState();
-    _loadPosts();
+    // Load posts when screen initializes
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<AppStateProvider>().fetchPosts();
+    });
   }
 
-  Future<void> _loadPosts() async {
-    try {
-      if (!mounted) return;
-      setState(() {
-        _isLoading = true;
-        _errorMessage = null;
-      });
-
-      final posts = await ApiService.fetchPosts();
-      if (!mounted) return;
-      setState(() {
-        _posts = posts;
-        _isLoading = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _errorMessage = e.toString();
-        _isLoading = false;
-      });
-    }
+  Future<void> _onRefresh() async {
+    await context.read<AppStateProvider>().refreshPosts();
   }
 
   @override
@@ -53,11 +36,7 @@ class _PostListScreenState extends State<PostListScreen> {
         elevation: 0,
         title: const Text(
           'Threads',
-          style: TextStyle(
-            color: Colors.black,
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-          ),
+          style: AppConstants.appBarTitleStyle,
         ),
         centerTitle: true,
         actions: [
@@ -75,107 +54,47 @@ class _PostListScreenState extends State<PostListScreen> {
   }
 
   Widget _buildBody() {
-    if (_isLoading) {
-      return const Center(
-        child: CircularProgressIndicator(
-          color: Colors.black,
-        ),
-      );
-    }
+    return Consumer<AppStateProvider>(
+      builder: (context, appState, child) {
+        if (appState.isLoadingPosts) {
+          return const common.LoadingWidget();
+        }
 
-    if (_errorMessage != null) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.error_outline,
-              size: 64,
-              color: Colors.grey[400],
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Something went wrong',
-              style: TextStyle(
-                fontSize: 18,
-                color: Colors.grey[600],
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              _errorMessage!,
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[500],
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: _loadPosts,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.black,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              child: const Text('Try Again'),
-            ),
-          ],
-        ),
-      );
-    }
+        if (appState.postsError != null) {
+          return common.ErrorWidget(
+            title: 'Something went wrong',
+            message: appState.postsError!,
+            onRetry: () => appState.fetchPosts(),
+          );
+        }
 
-    return RefreshIndicator(
-      onRefresh: _loadPosts,
-      child: ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: _posts.length,
-        itemBuilder: (context, index) {
-          final post = _posts[index];
-          return _buildPostCard(post, index);
-        },
-      ),
+        return RefreshIndicator(
+          onRefresh: _onRefresh,
+          child: ListView.builder(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
+            itemCount: appState.posts.length,
+            itemBuilder: (context, index) {
+              final post = appState.posts[index];
+              return _buildPostCard(post, index);
+            },
+          ),
+        );
+      },
     );
   }
 
   Widget _buildPostCard(Post post, int index) {
     // Create different avatar colors for variety
-    final avatarColors = [
-      Colors.blue[300]!,
-      Colors.green[300]!,
-      Colors.orange[300]!,
-      Colors.purple[300]!,
-      Colors.red[300]!,
-    ];
-
-    final avatarColor = avatarColors[index % avatarColors.length];
+    final avatarColor = AppUtils.getAvatarColor(index);
 
     // Create mock user names
-    final userNames = [
-      'Sophia Bennett',
-      'Ethan Carter',
-      'Olivia Davis',
-      'Liam Foster',
-      'Ava Green',
-      'Noah Williams',
-      'Emma Johnson',
-      'Lucas Brown'
-    ];
-
-    final userName = userNames[index % userNames.length];
+    final userName = AppUtils.getMockUserName(index);
 
     // Calculate time ago (mock data)
-    final timeAgo = index < 2
-        ? '1d'
-        : index < 4
-            ? '2d'
-            : '3d';
+    final timeAgo = AppUtils.getTimeAgo(index);
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
+      margin: const EdgeInsets.only(bottom: 8),
       child: InkWell(
         onTap: () {
           Navigator.push(
@@ -193,10 +112,10 @@ class _PostListScreenState extends State<PostListScreen> {
             children: [
               // Avatar
               CircleAvatar(
-                radius: 24,
+                radius: 30,
                 backgroundColor: avatarColor,
                 child: Text(
-                  userName.split(' ').map((e) => e[0]).join(''),
+                  AppUtils.getUserInitials(userName),
                   style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
@@ -204,7 +123,7 @@ class _PostListScreenState extends State<PostListScreen> {
                   ),
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 10),
               // Content
               Expanded(
                 child: Column(
@@ -213,21 +132,13 @@ class _PostListScreenState extends State<PostListScreen> {
                     // User name
                     Text(
                       userName,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.black,
-                      ),
+                      style: AppConstants.userNameStyle,
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 6),
                     // Post content
                     Text(
                       post.body,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        color: Colors.black87,
-                        height: 1.4,
-                      ),
+                      style: AppConstants.postBodyStyle.copyWith(fontSize: 15),
                       maxLines: 4,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -252,7 +163,7 @@ class _PostListScreenState extends State<PostListScreen> {
 
   Widget _buildBottomNavigationBar() {
     return Container(
-      height: 80,
+      height: 70,
       decoration: BoxDecoration(
         color: Colors.white,
         border: Border(
@@ -282,7 +193,7 @@ class _PostListScreenState extends State<PostListScreen> {
         onTap: () {
           // we can add navigation functionality here later we are just showing icons for now
         },
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(20),
         child: Padding(
           padding: const EdgeInsets.all(12),
           child: Icon(
